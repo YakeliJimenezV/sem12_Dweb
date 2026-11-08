@@ -1,69 +1,21 @@
-import Image from "next/image";
-
+"use client";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { api, type Author } from "@/lib/library";
+import { Icon } from "@/components/icon";
+import { AuthorForm, DeleteDialog, Hero, Loading, Modal, Notice, Stat } from "@/components/library-ui";
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  const [authors, setAuthors] = useState<Author[]>([]); const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<Author | "new" | null>(null); const [deleting, setDeleting] = useState<Author | null>(null);
+  const load = useCallback(async () => { setLoading(true); setError(""); try { setAuthors(await api<Author[]>("/api/authors")); } catch (err) { setError(err instanceof Error ? err.message : "Error de conexión"); } finally { setLoading(false); } }, []);
+  useEffect(() => { const controller = new AbortController();
+    void Promise.resolve().then(() => { if (!controller.signal.aborted) return load(); });
+    return () => controller.abort(); }, [load]);
+  const books = authors.flatMap(author => author.books);
+  const genres = new Set(books.map(book => book.genre).filter(genre => !!genre?.trim()));
+  const visible = authors.filter(author => `${author.name} ${author.email} ${author.nationality ?? ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  return <><Hero title="Dashboard" description="Gestión de autores, libros y estadísticas de la biblioteca"><button className="button burgundy" onClick={() => setEditing("new")}><Icon name="plus"/>Nuevo autor</button></Hero><div className="page-body"><Notice message={message}/><Notice message={error} error/>{error && <button className="button outline" onClick={load}>Reintentar</button>}{loading ? <Loading/> : <><section className="stats-grid" id="estadisticas" aria-label="Estadísticas generales"><Stat icon="book" value={books.length} label="Libros"/><Stat icon="users" value={authors.length} label="Autores"/><Stat icon="tag" value={genres.size} label="Géneros"/><Stat icon="chart" value={books.reduce((sum, book) => sum + (book.pages ?? 0), 0).toLocaleString("es-PE")} label="Páginas registradas"/></section><section id="autores"><div className="section-heading"><div><span className="eyebrow">EL ORIGEN DE CADA HISTORIA</span><h2>Autores registrados</h2></div><label className="search-field"><Icon name="search"/><input aria-label="Buscar autores" placeholder="Buscar autor…" value={search} onChange={event => setSearch(event.target.value)}/></label></div><div className="panel table-scroll"><table><thead><tr><th>#</th><th>Autor</th><th>Nacionalidad</th><th>Año de nacimiento</th><th>Libros</th><th>Acciones</th></tr></thead><tbody>{visible.map((author, index) => <tr key={author.id}><td>{index + 1}</td><td><Link className="author-cell" href={`/authors/${author.id}`}><span className="avatar">{author.name.split(" ").map(word => word[0]).slice(0,2).join("")}</span><span><strong>{author.name}</strong><small>{author.email}</small></span></Link></td><td>{author.nationality || "Sin registrar"}</td><td>{author.birthYear ?? "—"}</td><td><Link className="count-pill" href={`/authors/${author.id}#libros`} aria-label={`Ver ${author.books.length} libros de ${author.name}`}>{author.books.length}</Link></td><td><div className="actions"><Link className="icon-button" href={`/authors/${author.id}`} title="Ver autor y libros" aria-label={`Ver a ${author.name}`}><Icon name="eye" size={18}/></Link><button className="icon-button gold" onClick={() => setEditing(author)} title="Editar autor" aria-label={`Editar a ${author.name}`}><Icon name="edit" size={17}/></button><button className="icon-button danger" onClick={() => setDeleting(author)} title="Eliminar autor" aria-label={`Eliminar a ${author.name}`}><Icon name="trash" size={17}/></button></div></td></tr>)}</tbody></table>{!visible.length && <div className="empty"><Icon name="users" size={34}/><h3>{authors.length ? "No se encontraron autores" : "Tu biblioteca comienza con un autor"}</h3><p>{authors.length ? "Prueba con otro nombre o nacionalidad." : "Registra tu primer autor para empezar tu colección."}</p></div>}</div><p className="muted results-caption">{visible.length} de {authors.length} autores · Datos de tu biblioteca</p></section></>}</div>{editing && <Modal title={editing === "new" ? "Nuevo autor" : "Editar autor"} close={() => setEditing(null)}><AuthorForm author={editing === "new" ? undefined : editing} cancel={() => setEditing(null)} saved={() => { setEditing(null); setMessage("Autor guardado correctamente"); void load(); }}/></Modal>}{deleting && <DeleteDialog title="Eliminar autor" description={`¿Eliminar a ${deleting.name}? También se eliminarán sus ${deleting.books.length} libros asociados. Esta acción no se puede deshacer.`} url={`/api/authors/${deleting.id}`} close={() => setDeleting(null)} deleted={() => { setDeleting(null); setMessage("Autor eliminado correctamente"); void load(); }}/>}</>;
 }
+
+
